@@ -46,7 +46,9 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 	int[] ticksSinceHolePlug = new int[HOLES.length];
 	int rifleReload = 0;
 	int[] crew = new int[BOARDERS.length];
+	int[] crewOutgoing = new int[BOARDERS.length];
 	int boarderIncoming = 0;
+	int boarderOutgoing = 0;
 	
 	double water = 0;
 	
@@ -123,8 +125,8 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 			this.y = y;
 			double angle = r.nextDouble() * Math.PI * 2;
 			double spd = r.nextDouble();
-			dx = Math.cos(angle) * 4 * spd;
-			dy = Math.sin(angle) * 4 * spd;
+			dx = Math.cos(angle) * 1 * spd;
+			dy = Math.sin(angle) * 1 * spd;
 		}
 		
 		public boolean tick() {
@@ -148,14 +150,14 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 			in.setCursorVisible(false);
 		}
 		if (!music) {
-			in.playMusic("music", 1.0, null, this);
+			//in.playMusic("music", 1.0, null, this);
 			music = true;
 		}
 		tick++;
 		newLvlTick++;
 		if (newLvlTick < 100) { return; }
 		if (!defeat && !victory) {
-			if (hasBoarder && boarderIncoming == 0) {
+			if (hasBoarder && boarderIncoming == 0 && boarderOutgoing == 0) {
 				if (boarderMvRight) {
 					boarderX += 0.8 * lvl;
 					if (boarderX > 550) {
@@ -170,17 +172,18 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 			}
 
 			if (enemyReload-- == 0) {
-				if (!hasBoarder && r.nextInt(4) == 0) {
+				if (!hasBoarder && r.nextInt(6) == 0) {
 					hasBoarder = true;
 					boarderX = r.nextInt(550);
 					boarderMvRight = r.nextBoolean();
 					boarderIncoming = 50;
+					boarderOutgoing = 0;
 				} else {
-					if (r.nextBoolean()) {
+					if (r.nextInt(3) != 0) {
 						// Fire level
 						int target = r.nextInt(FIRES.length);
 						flashes.add(new Flash(45 + target * 55 - 16, 345 - 16));
-						fireLeft[target] = 3;
+						fireLeft[target] = 12;
 						in.play("cannon", 1.0, 1.0, 0, 0);
 					} else {
 						// Water level
@@ -217,11 +220,12 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 				for (int i = 0; i < BOARDERS.length; i++) {
 					if (in.keyPressed(BOARDERS[i])) {
 						rifleReload = 120;
-						if (hasBoarder && boarderIncoming == 0) {
+						if (hasBoarder && boarderIncoming == 0 && boarderOutgoing == 0) {
 							int boarderTile = (int) ((boarderX + 15) / 60);
-							if (boarderTile == i) {
+							if (boarderTile == i && crew[boarderTile] < 100) {
 								in.play("sword", 1.0, 1.0, 0, 0);
-								hasBoarder = false;
+								in.play("death", 1.0, 1.0, 0, 0);
+								boarderOutgoing = 1;
 								for (int j = 0; j < 60; j++) {
 									bloods.add(new Blood(boarderX + 10, 260));
 								}
@@ -250,13 +254,13 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 					fireLeft[i] = 0;
 				}
 				if (fireLeft[i] > 1) {
-					if (r.nextInt(150) == 0) {
+					if (r.nextInt(80) == 0) {
 						smokes.add(new Smoke(45 + i * 55, 345));
 					}
 					if (in.keyPressed(FIRES[i])) {
 						ticksSinceFirePlug[i] = 0;
 					}
-					fireDamage[i] += 0.45 * lvl;
+					fireDamage[i] += 0.25 * lvl;
 					if (ticksSinceFirePlug[i]++ == 0) {
 						fireLeft[i]--;
 					}
@@ -272,23 +276,37 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 					}
 				}
 			}
-			if (hasBoarder && boarderIncoming == 0) {
-				if ((tick + 15) % 30 == 0) {
+			if (hasBoarder && boarderIncoming == 0 && boarderOutgoing == 0) {
+				if ((tick + 20) % 40 == 0) {
 					int boarderTile = (int) ((boarderX + 15) / 60);
 					if (crew[boarderTile] < 100) {
 						in.play("sword", 1.0, 0.6, 0, 0);
-						crew[boarderTile] += 25 * lvl;
-						if (crew[boarderTile] > 100) {
+						crew[boarderTile] += r.nextInt(120) * lvl;
+						if (crew[boarderTile] >= 100) {
+							in.play("death", 1.0, 1.0, 0, 0);
 							crew[boarderTile] = 100;
+							crewOutgoing[boarderTile] = 1;
 						}
 						for (int j = 0; j < 25; j++) {
-							bloods.add(new Blood(boarderX + 10, 260));
+							bloods.add(new Blood(boarderTile * 60 + 15, 260));
 						}
 					}
 				}
 			}
 			if (boarderIncoming > 0) {
 				boarderIncoming--;
+			}
+			if (boarderOutgoing > 0) {
+				boarderOutgoing++;
+				if (boarderOutgoing == 60) {
+					hasBoarder = false;
+					boarderOutgoing = 0;
+				}
+			}
+			for (int i = 0; i < crewOutgoing.length; i++) {
+				if (crewOutgoing[i] > 0 && crewOutgoing[i] < 60) {
+					crewOutgoing[i]++;
+				}
 			}
 
 			if (hp() <= 0 || water >= 100 || crew() <= 0) {
@@ -299,10 +317,14 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 		} else {
 			if (defeat && endTimer == 0) {
 				in.play("sinking", 1.0, 1.0, 0, 0);
+				flashes.clear();
+				bloods.clear();
+				smokes.clear();
 			}
 			if (endTimer++ == 300) {
 				for (int i = 0; i < BOARDERS.length; i++) {
 					crew[i] = 0;
+					crewOutgoing[i] = 0;
 				}
 				water = 0;
 				endTimer = 0;
@@ -333,8 +355,9 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 		}
 	}
 	
-	Clr sky = new Clr(120, 120, 255);
+	Clr sky = new Clr(150, 150, 255);
 	Clr sea = new Clr(30, 50, 200);
+	Clr darkSea = new Clr(24, 40, 160);
 	Clr seaTop = new Clr(30, 50, 200, 150);
 	Img empty_cannon = new Img("empty_cannon");
 	Img flash = new Img("flash");
@@ -350,41 +373,47 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 	Img smoke = new Img("smoke");
 	Img burnt = new Img("burnt");
 	Img crewman = new Img("crew");
+	Img crewman_b = new Img("crew_b");
 	Img sail = new Img("sail");
+	Img cloud = new Img("cloud");
+	Img splash = new Img("splash");
+	Img seal = new Img("seal");
 
 	@Override
 	public void render(Frame f) {
 		Draw d = new Draw(f);
 		d.rect(sky, 0, 0, 800, 600);
 		d.rect(sea, 0, 400, 800, 200);
+		d.rect(darkSea, 0, 550, 800, 50);
+		d.blit(cloud, (390 + tick * 0.01) % 900 - 270, 60);
 		d.shift(120 + 300, 0 + 300);
 		d.rotate(Math.sin(tick * 0.03));
 		d.shift(-300, -300 + water * 1.15 + (defeat ? endTimer : 0));
 		d.blit(ship, 0, 0);
-		d.blit(sail, 220, 5, 60 + Math.sin(tick * 0.001) * 15, 240);
-		d.blit(sail, 340, 45, 40 + Math.sin(tick * 0.001) * 8, 200);
+		d.blit(sail, 220, 5, 60 + Math.sin(tick * 0.001) * 24, 270);
+		d.blit(sail, 340, 45, 40 + Math.sin(tick * 0.001) * 16, 220);
 		for (int i = 0; i < BOARDERS.length; i++) {
-			if (crew[i] < 100) {
-				d.blit(crewman, 10 + i * 60, 243);
-			}
+			double rot = crewOutgoing[i] > 0 ? 0.3 : 0;
+			d.blit((tick / 20 + i * 17) % 3 == 0 ? crewman_b : crewman, 10 + i * 60, 243 + crewOutgoing[i] * 8, rot);
 		}
 		if (hasBoarder) {
+			double rot = boarderOutgoing > 0 ? 0.3 : 0;
 			if (boarderMvRight) {
-				if ((tick / 15) % 2 == 0) {
-					d.blit(pirate_a_r, boarderX, 243 - boarderIncoming * 10);
+				if ((tick / 20) % 2 == 0) {
+					d.blit(pirate_a_r, boarderX, 243 - boarderIncoming * 8 + boarderOutgoing * 8, rot);
 				} else {
-					d.blit(pirate_b_r, boarderX, 245 - boarderIncoming * 10);
+					d.blit(pirate_b_r, boarderX, 245 - boarderIncoming * 8 + boarderOutgoing * 8, rot);
 				}
 			} else {
-				if ((tick / 15) % 2 == 0) {
-					d.blit(pirate_a, boarderX + 8, 243 - boarderIncoming * 10);
+				if ((tick / 20) % 2 == 0) {
+					d.blit(pirate_a, boarderX + 8, 243 - boarderIncoming * 8 + boarderOutgoing * 8, rot);
 				} else {
-					d.blit(pirate_b, boarderX, 245 - boarderIncoming * 10);
+					d.blit(pirate_b, boarderX, 245 - boarderIncoming * 8 + boarderOutgoing * 8, rot);
 				}
 			}
 		}
 		for (int i = 0; i < CANNON.length; i++) {
-			d.blit(cannonReload[i] == 0 ? loaded_cannon : empty_cannon, 28 + i * 55, 302);
+			d.blit(cannonReload[i] == 0 ? loaded_cannon : empty_cannon, 30 + i * 55, 304);
 		}
 		for (int i = 0; i < FIRES.length; i++) {
 			if (fireDamage[i] >= 100) {
@@ -393,15 +422,21 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 				d.blit(hole, 45 + i * 55, 345);
 			} else if (fireLeft[i] > 1) {
 				d.blit((tick / 12 + i * 17) % 2 == 0 ? hole_fire_0 : hole_fire_1, 45 + i * 55, 345);
+				if (ticksSinceFirePlug[i] > 0 && ticksSinceFirePlug[i] <= 8) {
+					d.blit(splash, 45 + i * 55, 345);
+				}
 			}
 		}
 		for (int i = 0; i < HOLES.length; i++) {
 			if (holes[i]) {
 				d.blit(hole, 63 + i * 65, 393);
+				if (ticksSinceHolePlug[i] <= 15) {
+					d.blit(seal, 58 + i * 65, 388);
+				}
 			}
 		}
 		int boarderTile = (int) ((boarderX + 15) / 60);
-		if (hasBoarder && rifleReload == 0) {
+		if (hasBoarder && boarderIncoming == 0 && boarderOutgoing == 0 && rifleReload == 0) {
 			for (int i = 0; i < BOARDERS.length; i++) {
 				if (i == boarderTile && crew[i] < 100) {
 					d.text("[bg=00000055]" + BOARDERS[i], FOUNT, 10 + i * 60, 260);
@@ -420,7 +455,7 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 		}
 		for (int i = 0; i < HOLES.length; i++) {
 			if (holes[i]) {
-				d.text((ticksSinceHolePlug[i] <= 10 ? "[GREEN]" : "") + HOLES[i], FOUNT, 80 + i * 65, 410);
+				d.text((ticksSinceHolePlug[i] <= 10 ? "[GREEN]" : "") + "[bg=00000055]" + HOLES[i], FOUNT, 80 + i * 65, 410);
 			}
 		}
 		for (Smoke sm : smokes) {
@@ -434,19 +469,19 @@ public class AllHandsOnDeck implements Game, MusicCallback {
 		}
 		d.resetTransforms();
 		d.rect(seaTop, 0, 400, 800, 200);
-		d.text("Crew: " + (int) crew() + "%\nWater level: " + (int) water + "%\nHull integrity: " + (int) hp() + "%\n\nEnemy: " + (int) enemyHp + "%", FOUNT, 10, 10);
+		d.text("[bg=00000055]Crew: " + (int) crew() + "%\nWater level: " + (int) water + "%\nHull integrity: " + (int) hp() + "%\n\nEnemy: " + (int) enemyHp + "%", FOUNT, 10, 10);
 		
 		if (victory) {
-			Pt sz = d.textSize("VICTORY!", GOUNT);
-			d.text("VICTORY!", GOUNT, 400 - sz.x / 2, 200);
+			Pt sz = d.textSize("[bg=00000055]VICTORY!", GOUNT);
+			d.text("[bg=00000055]VICTORY!", GOUNT, 400 - sz.x / 2, 200);
 		}
 		if (defeat) {
-			Pt sz = d.textSize("DEFEAT!", GOUNT);
-			d.text("DEFEAT!", GOUNT, 400 - sz.x / 2, 200);
+			Pt sz = d.textSize("[bg=00000055]DEFEAT!", GOUNT);
+			d.text("[bg=00000055]DEFEAT!", GOUNT, 400 - sz.x / 2, 200);
 		}
 		if (newLvlTick < 100) {
-			Pt sz = d.textSize(" ALL\nHANDS\n ON\nDECK!", GOUNT);
-			d.text(" ALL\nHANDS\n ON\nDECK!", GOUNT, 400 - sz.x / 2, 30);
+			Pt sz = d.textSize("[bg=00000055] ALL \nHANDS\n ON  \nDECK!", GOUNT);
+			d.text("[bg=00000055] ALL \nHANDS\n ON  \nDECK!", GOUNT, 400 - sz.x / 2, 30);
 		}
 	}
 }
